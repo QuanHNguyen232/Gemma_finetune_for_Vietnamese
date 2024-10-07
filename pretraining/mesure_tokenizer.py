@@ -1,10 +1,10 @@
-from transformers import LlamaTokenizer, AutoTokenizer
+from transformers import  AutoTokenizer
 import re
 import os
 from datasets import load_dataset
 import numpy as np 
 
-# tokenizer = LlamaTokenizer.from_pretrained('hpcai-tech/Colossal-LLaMA-2-7b-base')
+
 
 def compute_compression_ratio(text):
     text = keep_text_only(text)
@@ -31,9 +31,9 @@ def measure_tok_per_bype(text):
 
 if __name__ == "__main__":
 
-    tokenizer = AutoTokenizer.from_pretrained('meta-llama/Llama-2-7b-chat-hf')
+    tokenizer = AutoTokenizer.from_pretrained('google/gemma-2b')
     print("The number of vocab: ", len(tokenizer))
-    dataset = load_dataset('uonlp/vi-wiki-12-2023', split='train')
+    dataset = load_dataset('TranCongThien/viet_wiki_data', split='train')
     docs = dataset.remove_columns(['meta'])
     docs = docs['text'][:10000]
     print(measure_tok_per_bype(docs)) 

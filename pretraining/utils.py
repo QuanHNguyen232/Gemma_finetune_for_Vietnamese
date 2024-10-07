@@ -21,7 +21,6 @@ def set_seed(seed):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    torch.set_deterministic(True)
     
 def setup_distributed_training():
     """Initialize the process group for distributed training"""
@@ -47,6 +46,7 @@ def unwrap_model(model):
     
 def save_model_checkpoint_and_loader(
     model,
+    tokenizer,
     optimizer,
     lr_scheduler,
     train_dataloader,
@@ -92,6 +92,8 @@ def save_model_checkpoint_and_loader(
             state_dict=cpu_state,
             safe_serialization=True,
         )
+        # save tokenizer
+        tokenizer.save_pretrained(save_dir) # Lưu tokenizer cùng với mô hình
         
         state_dict_name = f"train_loader_state_dict.json"
         save_loader_path = str(save_dir) + "/" + state_dict_name

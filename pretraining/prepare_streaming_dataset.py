@@ -137,11 +137,6 @@ def build_hf_dataset(
     tokenizer: PreTrainedTokenizerBase = None,
 ) -> IterableDataset:
     
-    if os.path.isdir(path):
-        data_files = glob(f'{path}/*')
-    else:
-        data_files = path
-    
     hf_dataset = hf_datasets.load_dataset(path, split='train', streaming=True)
     
     if not isinstance(tokenizer, PreTrainedTokenizerBase):
@@ -173,7 +168,6 @@ def parse_args() -> Namespace:
 
     group = parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--concat_tokens', type=int, default=4096)
-    parser.add_argument('--split', type=str, default='train')
     parser.add_argument('--tokenizer', type=str, required=True)
     parser.add_argument('--eos_text', type=str, required=False, default="</s>")
 
@@ -196,7 +190,6 @@ def main(args: Namespace) -> None:
     columns = {'tokens': 'bytes'}
     
     dataset = build_hf_dataset(path=args.path,
-                               split=args.split,
                                max_length=args.concat_tokens,
                                eos_text=args.eos_text,
                                tokenizer=tokenizer)

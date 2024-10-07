@@ -23,7 +23,7 @@ def load_model(model_name_or_path, max_seq_length):
     local_rank = os.environ["LOCAL_RANK"]
     model = AutoModelForCausalLM.from_pretrained(
         model_name_or_path,
-        torch_dtype=torch.bfloat16,
+        quantization_config=bnb_config,
         attn_implementation="flash_attention_2",
         device_map=f"cuda:{local_rank}",
     )

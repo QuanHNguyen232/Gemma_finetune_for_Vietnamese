@@ -1,15 +1,10 @@
-import os 
 import fire
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tokenizers import AddedToken
 import numpy as np
-import huggingface_hub
-os.environ["HUGGING_FACE_HUB_TOKEN"] = "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"
-
 
 def download_model(model_name_or_path, output_dir):
-    
     tokenizer = AutoTokenizer.from_pretrained(
         model_name_or_path,
         use_fast=True,
@@ -31,7 +26,7 @@ def download_model(model_name_or_path, output_dir):
     print(f"Model and tokenizer are saved to {output_dir}")
 
 def test_chat_template():
-    tokenizer = AutoTokenizer.from_pretrained('gemma-2b')
+    tokenizer = AutoTokenizer.from_pretrained('google/gemma-2b')
     conversation = [{"role": "user", "content": "Hello!"}, 
                     {"role": "assistant", "content": "Hi there! How can I help you today?"},
                     {"role": "user", "content": "I need help with my computer."},
@@ -81,6 +76,4 @@ def dequantize_vector():
     return x_dequantized
 
 if __name__ == "__main__":
-    #fire.Fire()
-    #test_chat_template()
-    download_model('google/gemma-7b',"gemma-7b")
+    fire.Fire()

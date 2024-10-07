@@ -7,7 +7,7 @@ import torch.distributed as dist
 import torch.optim as optim 
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from transformers.models.llama.modeling_llama import LlamaDecoderLayer
+from transformers.models.gemma.modeling_gemma import GemmaDecoderLayer
 
 from torch.distributed.fsdp.fully_sharded_data_parallel import CPUOffload
 from torch.distributed.fsdp import (
@@ -15,28 +15,31 @@ from torch.distributed.fsdp import (
     ShardingStrategy
 )
 from dataset import get_streaming_data
-from fsdp import fsdp_auto_wrap_policy, apply_fsdp_checkpointing
+from fsdp import fsdp_auto_wrap_policy, apply_fsdp_checkpointing, get_policies
 from utils import set_seed, clear_gpu_cache, setup_distributed_training, cleanup, setup_environ_flags, save_model_checkpoint_and_loader
 
-def load_model(model_path: str = 'llama-7b', offload_params: bool = False, resume_from_checkpoint: str = None):
+def load_model(model_path, offload_params: bool = False, resume_from_checkpoint: str = None):
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
     if (not resume_from_checkpoint):
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
+            device_map=None,
             use_cache=False)
     else:
         model = AutoModelForCausalLM.from_pretrained(
             resume_from_checkpoint,
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
+            device_map=None,
             use_cache=False)
             
     model = FSDP(
         model,
-        auto_wrap_policy=fsdp_auto_wrap_policy(model, LlamaDecoderLayer),
+        auto_wrap_policy=get_policies(),
         cpu_offload=CPUOffload(offload_params=offload_params),
+        mixed_precision=None,
         sharding_strategy=ShardingStrategy.FULL_SHARD,
         device_id=torch.cuda.current_device(),
         limit_all_gathers=True,
@@ -77,6 +80,7 @@ def resume_from_checkpoint(model, optimizer, scheduler, resume_from_checkpoint: 
     
 def train(
     model,
+    tokenizer,
     train_dataloader,
     optimizer,
     lr_scheduler,
@@ -102,7 +106,6 @@ def train(
         total_loss += loss.detach().float()
         
         loss.backward()
-        # torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         model.clip_grad_norm_(1.0)
         
         if (step + 1) % gradient_accumulation_steps == 0 or step == len(train_dataloader) - 1:
@@ -111,15 +114,17 @@ def train(
             optimizer.zero_grad()
             pbar.update(1)
 
-        pbar.set_description(f"Lr {lr_scheduler.get_lr()} | Step {step}/{len(train_dataloader)} Completed (loss: {loss.detach().float()})")
+        pbar.set_description(f"Lr: {lr_scheduler.get_lr()} | Step {step}/{len(train_dataloader)} Completed (loss: {loss.detach().float()})")
         
         if (step % save_step == 0 and step != 0) or step + 1 == len(train_dataloader):
-            save_model_checkpoint_and_loader(model, optimizer, lr_scheduler, train_dataloader, local_rank, step)
+            save_model_checkpoint_and_loader(model,tokenizer, optimizer, lr_scheduler, train_dataloader, local_rank, step)
 
 def main(
+    model_path: str,
     local_data_path: str,
+    offload_params: bool = False,
     resume_from_checkpoint: str = None,
-    batch_size: int = 4,
+    batch_size: int = 2,
     num_workers: int = 4,
     context_length: int = 4096,
     gradient_accumulation_steps: int = 1):
@@ -136,7 +141,7 @@ def main(
         clear_gpu_cache(local_rank)
         setup_environ_flags(rank)
     
-    model, tokenizer = load_model()
+    model, tokenizer = load_model(model_path, offload_params=offload_params, resume_from_checkpoint=resume_from_checkpoint)
     train_dataloader = get_streaming_data(local_path=local_data_path, batch_size=batch_size, num_workers=num_workers, context_length=context_length)
     optimizer, lr_scheduler = load_optimizer(model, len(train_dataloader))
     
@@ -145,12 +150,13 @@ def main(
     
     train(
         model,
+        tokenizer,
         train_dataloader,
         optimizer,
         lr_scheduler,
         batch_size=batch_size,
         gradient_accumulation_steps=gradient_accumulation_steps,
-        save_step=500,
+        save_step=30000,
         local_rank=local_rank,
     )
 
